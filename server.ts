@@ -11,9 +11,21 @@ import { Room } from "./models/Room";
 import { Message, IMessage } from "./models/Message";
 
 const app = express();
+const allowedOrigins = (
+  process.env.CLIENT_ORIGINS ||
+  process.env.CLIENT_ORIGIN ||
+  "http://localhost:5173"
+)
+  .split(",")
+  .map((o) => o.trim())
+  .filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) return callback(null, origin);
+      return callback(new Error("Not allowed by CORS"));
+    },
     credentials: true
   })
 );
