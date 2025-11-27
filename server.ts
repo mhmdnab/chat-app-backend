@@ -11,22 +11,27 @@ import { Room } from "./models/Room";
 import { Message, IMessage } from "./models/Message";
 
 const app = express();
+const defaultOrigins = ["https://chat-app-frontend-indol-two.vercel.app"];
+
 const allowedOrigins = (
   process.env.CLIENT_ORIGINS ||
   process.env.CLIENT_ORIGIN ||
-  "http://localhost:5173"
+  defaultOrigins.join(",")
 )
   .split(",")
   .map((o) => o.trim())
   .filter(Boolean);
 
+console.log("CORS allowed origins:", allowedOrigins);
+
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) return callback(null, origin);
+      if (!origin || allowedOrigins.includes(origin))
+        return callback(null, origin);
       return callback(new Error("Not allowed by CORS"));
     },
-    credentials: true
+    credentials: true,
   })
 );
 app.use(express.json());
@@ -34,9 +39,9 @@ app.use(express.json());
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
-    methods: ["GET", "POST"]
-  }
+    origin: allowedOrigins,
+    methods: ["GET", "POST"],
+  },
 });
 
 const onlineUsers = new Map<string, Set<string>>(); // username -> socketIds
@@ -107,7 +112,7 @@ app.get("/private/:user1/:user2", async (req: Request, res: Response) => {
   try {
     const { user1, user2 } = req.params;
     const messages = await Message.find({
-      participants: { $all: [user1, user2] }
+      participants: { $all: [user1, user2] },
     }).sort({ timestamp: 1 });
     return res.json(messages);
   } catch (err) {
@@ -128,7 +133,13 @@ io.on("connection", (socket) => {
 
   socket.on(
     "join_room",
-    async ({ roomId, username: user }: { roomId: string; username: string }) => {
+    async ({
+      roomId,
+      username: user,
+    }: {
+      roomId: string;
+      username: string;
+    }) => {
       if (!roomId || !user) return;
       socket.join(roomId);
 
@@ -163,7 +174,7 @@ io.on("connection", (socket) => {
     async ({
       roomId,
       content,
-      sender
+      sender,
     }: {
       roomId: string;
       content: string;
@@ -174,7 +185,7 @@ io.on("connection", (socket) => {
         sender,
         content,
         roomId,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
       io.to(roomId).emit("message", message);
     }
@@ -186,7 +197,7 @@ io.on("connection", (socket) => {
       roomId,
       sender,
       to,
-      isPrivate
+      isPrivate,
     }: {
       roomId?: string;
       sender: string;
@@ -210,7 +221,7 @@ io.on("connection", (socket) => {
       roomId,
       sender,
       to,
-      isPrivate
+      isPrivate,
     }: {
       roomId?: string;
       sender: string;
@@ -233,7 +244,7 @@ io.on("connection", (socket) => {
     async ({
       to,
       sender,
-      content
+      content,
     }: {
       to: string;
       sender: string;
@@ -245,11 +256,13 @@ io.on("connection", (socket) => {
         sender,
         content,
         participants,
-        timestamp: new Date()
+        timestamp: new Date(),
       });
 
       const targetSockets = onlineUsers.get(to);
-      targetSockets?.forEach((sid) => io.to(sid).emit("private_message", message));
+      targetSockets?.forEach((sid) =>
+        io.to(sid).emit("private_message", message)
+      );
       socket.emit("private_message", message);
     }
   );
